@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>シンメー様 受付</title>
+  <style>
+    body { font-family: sans-serif; background-color: #FFF3E0; text-align: center; margin: 0; padding: 20px; color: #333; }
+    .step { display: none; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }
+    .active { display: block; }
+    h2 { color: #E65100; font-size: 22px; margin-bottom: 20px;}
+    .btn { padding: 15px 25px; margin: 10px; font-size: 18px; background-color: #FF9800; color: white; border: none; border-radius: 8px; cursor: pointer; }
+    .btn-mic { background-color: #FF5722; border-radius: 50px; padding: 15px 30px; font-size: 20px; margin-bottom: 5px; }
+    .btn-mic.listening { background-color: #D32F2F; animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+    .mic-msg { min-height: 1.4em; font-size: 15px; color: #BF360C; margin: 0 0 10px; }
+    input { width: 80%; padding: 15px; font-size: 18px; border: 2px solid #FFCC80; border-radius: 8px; margin-bottom: 20px; }
+    .summary p { text-align: left; font-size: 18px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+  </style>
+</head>
+<body>
+  <div id="step1" class="step active">
+    <h2>ご用件をお選びください</h2>
+    <button class="btn" onclick="nextStep(2, 'purpose', '面会')">👥 面会（ご家族など）</button>
+    <button class="btn" onclick="nextStep(2, 'purpose', '業者・医療')">🏢 業者・医療関係</button>
+  </div>
+
+  <div id="step2" class="step">
+    <h2>どなたにお会いですか？（入居者様名など）</h2>
+    <input type="text" id="target" placeholder="例：山田花子 / 事務室">
+    <button class="btn btn-mic" onclick="startMic('target', this)">🎙 声で入力</button>
+    <p class="mic-msg" id="msg-target"></p>
+    <button class="btn" onclick="nextStep(3, 'target', document.getElementById('target').value)">次へ</button>
+  </div>
+
+  <div id="step3" class="step">
+    <h2>あなたのお名前（企業名）</h2>
+    <input type="text" id="visitor" placeholder="例：山田太郎 / 株式会社〇〇">
+    <button class="btn btn-mic" onclick="startMic('visitor', this)">🎙 声で入力</button>
+    <p class="mic-msg" id="msg-visitor"></p>
+    <button class="btn" onclick="nextStep(4, 'visitor', document.getElementById('visitor').value)">次へ</button>
+  </div>
+
+  <div id="step4" class="step">
+    <h2>続柄</h2>
+    <button class="btn" onclick="nextStep(5, 'relation', '夫・妻')">夫・妻</button>
+    <button class="btn" onclick="nextStep(5, 'relation', '長男・長女')">長男・長女</button>
+    <button class="btn" onclick="nextStep(5, 'relation', 'その他')">その他</button>
+  </div>
+
+  <div id="step5" class="step">
+    <h2>ご連絡先（電話番号）</h2>
+    <input type="tel" id="contact" placeholder="例：090-1234-5678">
+    <button class="btn btn-mic" onclick="startMic('contact', this)">🎙 声で入力</button>
+    <p class="mic-msg" id="msg-contact"></p>
+    <button class="btn" onclick="nextStep(6, 'contact', document.getElementById('contact').value)">次へ</button>
+  </div>
+
+  <div id="step6" class="step">
+    <h2>本日の体温</h2>
+    <input type="number" step="0.1" id="temp" placeholder="例：36.5">
+    <button class="btn btn-mic" onclick="startMic('temp', this)">🎙 声で入力</button>
+    <p class="mic-msg" id="msg-temp"></p>
+    <button class="btn" onclick="showConfirm()">確認へ</button>
+  </div>
+
+  <div id="step7" class="step">
+    <h2>入力内容の確認</h2>
+    <div class="summary">
+      <p><strong>用件：</strong> <span id="res-purpose"></span></p>
+      <p><strong>訪問先：</strong> <span id="res-target"></span></p>
+      <p><strong>お名前：</strong> <span id="res-visitor"></span></p>
+      <p id="wrap-relation"><strong>続柄：</strong> <span id="res-relation"></span></p>
+      <p><strong>連絡先：</strong> <span id="res-contact"></span></p>
+      <p><strong>体温：</strong> <span id="res-temp"></span> 度</p>
+    </div>
+    <button class="btn" id="submitBtn" style="background-color:#4CAF50;" onclick="submitData()">送信する</button>
+    <button class="btn" style="background-color:#9E9E9E;" onclick="location.reload()">最初から</button>
+  </div>
+
+  <div id="step8" class="step">
+    <h2>受付が完了しました</h2>
+    <p>どうぞお入りください。</p>
+    <p>※5秒後に自動で最初の画面に戻ります</p>
+  </div>
+
+  <script>
+    // ★GASのWebアプリURL（/exec で終わるもの）
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbzAtJkaCm4hv1csUcHDRsepx10mYQc68cLfEFseE3-GqlMLAIuS39z8mCc0kruODhW2/exec';
+
+    let data = {};
+    function nextStep(nextId, key, value) {
+      if (key) data[key] = value;
+
+      if (nextId === 4 && data['purpose'] === '業者・医療') {
+        data['relation'] = '（なし）';
+        nextId = 5;
+      }
+
+      stopMic();
+      document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
+      document.getElementById('step' + nextId).classList.add('active');
+    }
+
+    function showConfirm() {
+      data['temp'] = document.getElementById('temp').value;
+      document.getElementById('res-purpose').innerText = data['purpose'];
+      document.getElementById('res-target').innerText = data['target'] || '未入力';
+      document.getElementById('res-visitor').innerText = data['visitor'] || '未入力';
+
+      if (data['purpose'] === '業者・医療') {
+        document.getElementById('wrap-relation').style.display = 'none';
+      } else {
+        document.getElementById('wrap-relation').style.display = 'block';
+        document.getElementById('res-relation').innerText = data['relation'] || '未入力';
+      }
+
+      document.getElementById('res-contact').innerText = data['contact'] || '未入力';
+      document.getElementById('res-temp').innerText = data['temp'] || '未入力';
+      nextStep(7);
+    }
+
+    // GASへ送信（google.script.run の代わりに fetch を使う）
+    function submitData() {
+      const btn = document.getElementById('submitBtn');
+      btn.innerText = '送信中...';
+      btn.disabled = true;
+
+      fetch(GAS_URL, { method: 'POST', body: JSON.stringify(data) })
+        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) throw new Error(res.error || '保存に失敗しました');
+          nextStep(8);
+          setTimeout(() => location.reload(), 5000);
+        })
+        .catch(err => {
+          alert('エラーが発生しました: ' + err.message);
+          btn.innerText = '送信する';
+          btn.disabled = false;
+        });
+    }
+
+    // ===== 音声入力 =====
+    let recognition = null;
+    let micBtn = null;
+    const MIC_LABEL = '🎙 声で入力';
+
+    function setMsg(inputId, text) {
+      const el = document.getElementById('msg-' + inputId);
+      if (el) el.innerText = text;
+    }
+
+    function resetBtn() {
+      if (micBtn) {
+        micBtn.classList.remove('listening');
+        micBtn.innerText = MIC_LABEL;
+      }
+      micBtn = null;
+    }
+
+    function stopMic() {
+      if (recognition) {
+        try { recognition.abort(); } catch (e) {}
+        recognition = null;
+      }
+      resetBtn();
+    }
+
+    // 体温：「36度5分」「36.5」「三十六度五分」などを 36.5 に変換
+    function toTemp(text) {
+      const kanji = { '〇':0,'零':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9 };
+      text = text.replace(/([一二三四五六七八九]?)十([一二三四五六七八九]?)/g, function(_, a, b) {
+        return String((a ? kanji[a] : 1) * 10 + (b ? kanji[b] : 0));
+      });
+      text = text.replace(/[〇零一二三四五六七八九]/g, c => kanji[c]);
+      text = text.replace(/[０-９．]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+      const m = text.match(/(\d{2})\s*(?:度|\.|点)?\s*(\d)?/);
+      if (!m) return '';
+      return m[2] ? m[1] + '.' + m[2] : m[1];
+    }
+
+    function startMic(inputId, btn) {
+      const input = document.getElementById(inputId);
+
+      if (recognition) { stopMic(); setMsg(inputId, ''); return; }
+
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) {
+        setMsg(inputId, 'このブラウザは音声入力に対応していません。');
+        return;
+      }
+
+      setMsg(inputId, '準備中…');
+      recognition = new SR();
+      recognition.lang = 'ja-JP';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      micBtn = btn;
+
+      recognition.onstart = function() {
+        btn.classList.add('listening');
+        btn.innerText = '👂 お話しください…';
+        setMsg(inputId, '');
+      };
+
+      recognition.onresult = function(event) {
+        let text = event.results[0][0].transcript;
+        if (inputId === 'temp') {
+          text = toTemp(text);
+          if (!text) { setMsg(inputId, 'うまく聞き取れませんでした。もう一度どうぞ（例：「さんじゅうろくてんご」）'); return; }
+        } else if (inputId === 'contact') {
+          text = text.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+                     .replace(/[^0-9\-]/g, '');
+        }
+        input.value = text;
+      };
+
+      recognition.onerror = function(event) {
+        const reasons = {
+          'not-allowed':         'マイクの使用が許可されていません。iPadの設定を確認してください。',
+          'service-not-allowed': '音声入力が使えません。iPadの「音声入力」設定を確認してください。',
+          'audio-capture':       'マイクが見つかりません。',
+          'no-speech':           '声が聞こえませんでした。もう一度押してください。',
+          'network':             '通信エラーです。ネット接続を確認してください。'
+        };
+        setMsg(inputId, reasons[event.error] || ('音声入力エラー（' + event.error + '）'));
+      };
+
+      recognition.onend = function() {
+        recognition = null;
+        resetBtn();
+      };
+
+      try {
+        recognition.start();
+      } catch (e) {
+        stopMic();
+        setMsg(inputId, '音声入力を開始できませんでした。もう一度押してください。');
+      }
+    }
+  </script>
+</body>
+</html>
