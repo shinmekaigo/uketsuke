@@ -6,17 +6,21 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title>シンメー様 受付</title>
   <style>
-    body { font-family: sans-serif; background-color: #FFF3E0; text-align: center; margin: 0; padding: 20px; color: #333; }
-    .step { display: none; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); max-width: 500px; margin: 0 auto; }
+    body { font-family: sans-serif; background-color: #FFF3E0; text-align: center; margin: 0; padding: 30px 20px; color: #333; font-size: 24px; }
+    .step { display: none; background: white; padding: 50px 40px; border-radius: 24px; box-shadow: 0 6px 16px rgba(0,0,0,0.12); max-width: 800px; margin: 0 auto; }
     .active { display: block; }
-    h2 { color: #E65100; font-size: 22px; margin-bottom: 20px;}
-    .btn { padding: 15px 25px; margin: 10px; font-size: 18px; background-color: #FF9800; color: white; border: none; border-radius: 8px; cursor: pointer; }
-    .btn-mic { background-color: #FF5722; border-radius: 50px; padding: 15px 30px; font-size: 20px; margin-bottom: 5px; }
+    h2 { color: #E65100; font-size: 38px; line-height: 1.4; margin: 0 0 35px; }
+    .btn { display: block; width: 90%; margin: 20px auto; padding: 28px 20px; font-size: 32px; font-weight: bold; background-color: #FF9800; color: white; border: none; border-radius: 16px; cursor: pointer; }
+    .btn:active { transform: scale(0.97); }
+    .btn-mic { background-color: #FF5722; border-radius: 60px; margin-bottom: 10px; }
     .btn-mic.listening { background-color: #D32F2F; animation: pulse 1s infinite; }
-    @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
-    .mic-msg { min-height: 1.4em; font-size: 15px; color: #BF360C; margin: 0 0 10px; }
-    input { width: 80%; padding: 15px; font-size: 18px; border: 2px solid #FFCC80; border-radius: 8px; margin-bottom: 20px; }
-    .summary p { text-align: left; font-size: 18px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+    @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+    .mic-msg { min-height: 1.5em; font-size: 22px; color: #BF360C; margin: 0 0 15px; }
+    input { box-sizing: border-box; width: 90%; padding: 24px; font-size: 32px; border: 3px solid #FFCC80; border-radius: 14px; margin-bottom: 20px; }
+    input:focus { outline: none; border-color: #FF9800; }
+    .summary { margin-bottom: 20px; }
+    .summary p { text-align: left; font-size: 28px; border-bottom: 2px solid #eee; padding: 12px 5px; margin: 0; }
+    .done-text { font-size: 30px; }
   </style>
 </head>
 <body>
@@ -27,7 +31,7 @@
   </div>
 
   <div id="step2" class="step">
-    <h2>どなたにお会いですか？（入居者様名など）</h2>
+    <h2>どなたにお会いですか？<br>（入居者様名など）</h2>
     <input type="text" id="target" placeholder="例：山田花子 / 事務室">
     <button class="btn btn-mic" onclick="startMic('target', this)">🎙 声で入力</button>
     <p class="mic-msg" id="msg-target"></p>
@@ -35,7 +39,7 @@
   </div>
 
   <div id="step3" class="step">
-    <h2>あなたのお名前（企業名）</h2>
+    <h2>あなたのお名前<br>（企業名）</h2>
     <input type="text" id="visitor" placeholder="例：山田太郎 / 株式会社〇〇">
     <button class="btn btn-mic" onclick="startMic('visitor', this)">🎙 声で入力</button>
     <p class="mic-msg" id="msg-visitor"></p>
@@ -81,7 +85,7 @@
 
   <div id="step8" class="step">
     <h2>受付が完了しました</h2>
-    <p>どうぞお入りください。</p>
+    <p class="done-text">どうぞお入りください。</p>
     <p>※5秒後に自動で最初の画面に戻ります</p>
   </div>
 
@@ -101,6 +105,7 @@
       stopMic();
       document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
       document.getElementById('step' + nextId).classList.add('active');
+      window.scrollTo(0, 0);
     }
 
     function showConfirm() {
@@ -121,7 +126,7 @@
       nextStep(7);
     }
 
-    // GASへ送信（google.script.run の代わりに fetch を使う）
+    // GASへ送信
     function submitData() {
       const btn = document.getElementById('submitBtn');
       btn.innerText = '送信中...';
