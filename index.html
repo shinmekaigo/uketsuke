@@ -14,10 +14,16 @@
     .btn:active { transform: scale(0.97); }
     .btn-mic { background-color: #FF5722; border-radius: 60px; margin-bottom: 10px; }
     .btn-mic.listening { background-color: #D32F2F; animation: pulse 1s infinite; }
+    .btn-cand { background-color: #FFFFFF; color: #E65100; border: 4px solid #FF9800; }
+    .btn-add { background-color: #FFFFFF; color: #E65100; border: 4px dashed #FF9800; }
+    .btn-gray { background-color: #9E9E9E; font-size: 26px; padding: 22px 20px; }
     @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
     .mic-msg { min-height: 1.5em; font-size: 22px; color: #BF360C; margin: 0 0 15px; }
     input { box-sizing: border-box; width: 90%; padding: 24px; font-size: 32px; border: 3px solid #FFCC80; border-radius: 14px; margin-bottom: 20px; }
     input:focus { outline: none; border-color: #FF9800; }
+    .selected-box { background: #FFF8E1; border: 3px solid #FFCC80; border-radius: 16px; padding: 20px; margin: 0 auto 20px; width: 90%; box-sizing: border-box; text-align: left; }
+    .selected-box p { font-size: 30px; margin: 8px 0; }
+    .selected-label { font-size: 22px; color: #888; margin-bottom: 10px; }
     .summary { margin-bottom: 20px; }
     .summary p { text-align: left; font-size: 28px; border-bottom: 2px solid #eee; padding: 12px 5px; margin: 0; }
     .done-text { font-size: 30px; }
@@ -31,11 +37,30 @@
   </div>
 
   <div id="step2" class="step">
-    <h2>どなたにお会いですか？<br>（入居者様名など）</h2>
-    <input type="text" id="target" placeholder="例：山田花子 / 事務室">
+    <h2 id="target-title">どなたに（どちらに）<br>ご用ですか？</h2>
+    <input type="text" id="target" placeholder="例：山田花子 / 101号室 / 厨房">
     <button class="btn btn-mic" onclick="startMic('target', this)">🎙 声で入力</button>
     <p class="mic-msg" id="msg-target"></p>
-    <button class="btn" onclick="nextStep(3, 'target', document.getElementById('target').value)">次へ</button>
+    <button class="btn" onclick="searchTarget()">次へ</button>
+    <button class="btn btn-gray" id="btn-cancel-add" style="display:none;" onclick="showSelected()">追加をやめる</button>
+  </div>
+
+  <div id="stepPick" class="step">
+    <h2 id="cand-title">こちらでよろしいですか？</h2>
+    <div id="cand-list"></div>
+    <button class="btn btn-gray" id="btn-asis">入力したまま進む</button>
+    <button class="btn btn-gray" onclick="retryTarget()">言い直す</button>
+  </div>
+
+  <div id="stepMore" class="step">
+    <h2>ほかにもお会いになる方は<br>いらっしゃいますか？</h2>
+    <div class="selected-box">
+      <div class="selected-label">選択中</div>
+      <div id="selected-list"></div>
+    </div>
+    <button class="btn btn-add" onclick="addMore()">＋ ほかの方も追加する</button>
+    <button class="btn" onclick="finishTargets()">次へ進む</button>
+    <button class="btn btn-gray" onclick="resetTargets()">選び直す</button>
   </div>
 
   <div id="step3" class="step">
@@ -80,7 +105,7 @@
       <p><strong>体温：</strong> <span id="res-temp"></span> 度</p>
     </div>
     <button class="btn" id="submitBtn" style="background-color:#4CAF50;" onclick="submitData()">送信する</button>
-    <button class="btn" style="background-color:#9E9E9E;" onclick="location.reload()">最初から</button>
+    <button class="btn btn-gray" onclick="location.reload()">最初から</button>
   </div>
 
   <div id="step8" class="step">
@@ -94,6 +119,8 @@
     const GAS_URL = 'https://script.google.com/macros/s/AKfycbzAtJkaCm4hv1csUcHDRsepx10mYQc68cLfEFseE3-GqlMLAIuS39z8mCc0kruODhW2/exec';
 
     let data = {};
+    let targets = [];   // 選んだ訪問先（複数OK）
+
     function nextStep(nextId, key, value) {
       if (key) data[key] = value;
 
@@ -106,6 +133,88 @@
       document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
       document.getElementById('step' + nextId).classList.add('active');
       window.scrollTo(0, 0);
+    }
+
+    // ===== 訪問先の候補検索 =====
+    function searchTarget() {
+      const q = document.getElementById('target').value.trim();
+      if (!q) { setMsg('target', 'お名前か場所を入力してください'); return; }
+      setMsg('target', '探しています…');
+
+      fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'search', q: q }) })
+        .then(res => res.json())
+        .then(res => {
+          setMsg('target', '');
+          showCandidates(q, res.ok ? res.candidates : []);
+        })
+        .catch(() => {
+          setMsg('target', '');
+          showCandidates(q, []);
+        });
+    }
+
+    function showCandidates(q, list) {
+      const box = document.getElementById('cand-list');
+      box.innerHTML = '';
+      document.getElementById('cand-title').innerText =
+        list.length ? 'こちらでよろしいですか？' : '見つかりませんでした';
+
+      list.forEach(c => {
+        const b = document.createElement('button');
+        b.className = 'btn btn-cand';
+        b.innerText = c.label;
+        b.onclick = () => addTarget(c.value);
+        box.appendChild(b);
+      });
+
+      const asis = document.getElementById('btn-asis');
+      asis.innerText = '「' + q + '」のまま進む';
+      asis.onclick = () => addTarget(q);
+
+      nextStep('Pick');
+    }
+
+    function retryTarget() {
+      document.getElementById('target').value = '';
+      nextStep(2);
+    }
+
+    // ===== 複数選択 =====
+    function addTarget(value) {
+      if (targets.indexOf(value) < 0) targets.push(value);
+      showSelected();
+    }
+
+    function showSelected() {
+      const list = document.getElementById('selected-list');
+      list.innerHTML = '';
+      targets.forEach(t => {
+        const p = document.createElement('p');
+        p.innerText = '・' + t;
+        list.appendChild(p);
+      });
+      nextStep('More');
+    }
+
+    function addMore() {
+      document.getElementById('target').value = '';
+      document.getElementById('target-title').innerHTML = 'ほかにお会いになる方の<br>お名前をどうぞ';
+      document.getElementById('btn-cancel-add').style.display = 'block';
+      setMsg('target', '');
+      nextStep(2);
+    }
+
+    function resetTargets() {
+      targets = [];
+      document.getElementById('target').value = '';
+      document.getElementById('target-title').innerHTML = 'どなたに（どちらに）<br>ご用ですか？';
+      document.getElementById('btn-cancel-add').style.display = 'none';
+      setMsg('target', '');
+      nextStep(2);
+    }
+
+    function finishTargets() {
+      nextStep(3, 'target', targets.join('、'));
     }
 
     function showConfirm() {
@@ -219,6 +328,9 @@
                      .replace(/[^0-9\-]/g, '');
         }
         input.value = text;
+
+        // 訪問先は、話し終わったら自動で候補を探す
+        if (inputId === 'target') searchTarget();
       };
 
       recognition.onerror = function(event) {
